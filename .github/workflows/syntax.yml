@@ -23,6 +23,8 @@ jobs:
           }
           if ($bad -gt 0) { throw "$bad file(s) failed to parse" }
           Write-Host "all files parsed"
+      # Windows PowerShell 5.1 on purpose: PowerShell 7 (.NET Core) has no WinRT
+      # projection, so [Windows.Media.Ocr.OcrEngine] cannot be resolved there.
       - name: OCR smoke test
-        shell: pwsh
+        shell: powershell
         run: ./scripts/Test-HoverOcrEngine.ps1
