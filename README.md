@@ -1,6 +1,6 @@
 # WinHoverOCR
 
-[![syntax](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml/badge.svg)](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml)
+[![syntax](https://github.com/XiTongJun-Hebe/Kevely0102/actions/workflows/syntax.yml/badge.svg)](https://github.com/XiTongJun-Hebe/Kevely0102/actions/workflows/syntax.yml)
 
 **Read data that only appears on hover.** Point the mouse at a list row, screenshot the
 tooltip / profile card that pops up, OCR it, then scroll and repeat until the list ends.
@@ -51,8 +51,8 @@ complaining.
 ## Quick start
 
 ```powershell
-git clone https://github.com/<you>/winhover-ocr.git
-cd winhover-ocr
+git clone https://github.com/<you>/Kevely0102.git
+cd Kevely0102
 
 # 1. is OCR alive on this machine?
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-HoverOcrEngine.ps1

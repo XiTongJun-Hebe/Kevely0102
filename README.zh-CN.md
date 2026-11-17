@@ -1,6 +1,6 @@
 # WinHoverOCR
 
-[![syntax](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml/badge.svg)](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml)
+[![syntax](https://github.com/XiTongJun-Hebe/Kevely0102/actions/workflows/syntax.yml/badge.svg)](https://github.com/XiTongJun-Hebe/Kevely0102/actions/workflows/syntax.yml)
 
 **把「只有鼠标悬停才会出现」的数据读出来。** 把光标移到列表行上，截取弹出的悬浮卡片 /
 提示框，交给 Windows 自带 OCR，再滚动列表、重复，直到读完整个列表。
@@ -49,8 +49,8 @@ Python、不调云端接口、不登录、不联网。
 ## 快速开始
 
 ```powershell
-git clone https://github.com/<you>/winhover-ocr.git
-cd winhover-ocr
+git clone https://github.com/<you>/Kevely0102.git
+cd Kevely0102
 
 # 1. 先确认这台机器的 OCR 能用
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-HoverOcrEngine.ps1
