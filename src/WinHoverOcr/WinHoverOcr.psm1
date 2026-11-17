@@ -38,6 +38,9 @@ $script:TempCapture = Join-Path ([System.IO.Path]::GetTempPath()) 'winhoverocr_c
 function Initialize-HoverOcr {
   [CmdletBinding()]
   param()
+  if ($PSVersionTable.PSVersion.Major -ge 6) {
+    throw ('WinHoverOCR needs Windows PowerShell 5.1 (powershell.exe). PowerShell ' + $PSVersionTable.PSVersion + ' / .NET Core has no WinRT projection, so [Windows.Media.Ocr.OcrEngine] cannot be resolved. Run: powershell -NoProfile -ExecutionPolicy Bypass -File <script>.ps1')
+  }
   [void][WinHoverNative]::SetProcessDPIAware()
   if ($null -eq $script:OcrEngine) {
     Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop

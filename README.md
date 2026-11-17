@@ -1,5 +1,7 @@
 # WinHoverOCR
 
+[![syntax](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml/badge.svg)](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml)
+
 **Read data that only appears on hover.** Point the mouse at a list row, screenshot the
 tooltip / profile card that pops up, OCR it, then scroll and repeat until the list ends.
 
@@ -40,7 +42,9 @@ complaining.
 ## Requirements
 
 - Windows 10 / 11 (uses `Windows.Media.Ocr`, present in every modern Windows)
-- Windows PowerShell 5.1 (the built-in `powershell.exe`) or PowerShell 7
+- **Windows PowerShell 5.1** (the built-in `powershell.exe`). PowerShell 7 cannot run this:
+  .NET Core has no WinRT projection, so `[Windows.Media.Ocr.OcrEngine]` does not resolve.
+  The module throws an explicit error instead of failing obscurely.
 - An OCR language pack that covers the card text (Simplified Chinese pack for QQ)
 - The target app visible on a physical display, list panel open, **not** minimized
 

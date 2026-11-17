@@ -1,5 +1,7 @@
 # WinHoverOCR
 
+[![syntax](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml/badge.svg)](https://github.com/XiTongJun-Hebe/winhover-ocr/actions/workflows/syntax.yml)
+
 **把「只有鼠标悬停才会出现」的数据读出来。** 把光标移到列表行上，截取弹出的悬浮卡片 /
 提示框，交给 Windows 自带 OCR，再滚动列表、重复，直到读完整个列表。
 
@@ -38,7 +40,9 @@ Python、不调云端接口、不登录、不联网。
 ## 环境要求
 
 - Windows 10 / 11（使用系统自带 `Windows.Media.Ocr`）
-- Windows PowerShell 5.1（系统自带 `powershell.exe`）或 PowerShell 7
+- **Windows PowerShell 5.1**（系统自带 `powershell.exe`）。PowerShell 7 跑不了：
+  .NET Core 没有 WinRT 投影，`[Windows.Media.Ocr.OcrEngine]` 无法解析。模块会直接抛错，
+  而不是给出莫名其妙的失败。
 - 覆盖卡片文字的 OCR 语言包（中文卡片需要简体中文包）
 - 目标窗口在物理显示器上可见、列表面板已打开、**未最小化**
 
