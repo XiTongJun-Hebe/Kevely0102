@@ -1,9 +1,9 @@
 ---
-name: winhover-ocr
+name: kevely0102
 description: Read values that only appear in a hover tooltip/profile card on Windows (e.g. export every QQ group member's QQ id to a txt file). Uses the real cursor, Windows.Media.Ocr and stock PowerShell — no Selenium, no Python, no login, no network.
 ---
 
-# WinHoverOCR
+# Kevely0102
 
 Extract a field that a Windows desktop app only shows on hover: move the real cursor onto each
 list row, OCR the popup card, scroll, repeat, and write a sorted de-duplicated list.
