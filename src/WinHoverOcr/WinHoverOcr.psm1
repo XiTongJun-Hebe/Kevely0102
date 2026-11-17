@@ -352,7 +352,7 @@ function Invoke-HoverFieldScan {
     [switch]$TailSweep,
     [int]$MinHits = 1,
     [int]$SweepNotches = 0,
-    [int]$TopNotches = 60
+    [int]$TopNotches = 220
   )
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
   $hits = @{}
