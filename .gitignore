@@ -1,0 +1,13 @@
+# scan output and intermediate captures
+*.txt
+!examples/*.txt
+*.log
+*.png
+*.bmp
+*.json
+
+# powershell noise
+__pycache__/
+*.pyc
+.vs/
+.idea/
