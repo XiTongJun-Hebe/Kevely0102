@@ -1,0 +1,28 @@
+name: syntax
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  parse:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse every PowerShell file
+        shell: pwsh
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse -Include *.ps1,*.psm1,*.psd1 | ForEach-Object {
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              $bad++
+              Write-Host ("FAIL {0}:{1} {2}" -f $_.Name, $errors[0].Extent.StartLineNumber, $errors[0].Message)
+            }
+          }
+          if ($bad -gt 0) { throw "$bad file(s) failed to parse" }
+          Write-Host "all files parsed"
+      - name: OCR smoke test
+        shell: pwsh
+        run: ./scripts/Test-HoverOcrEngine.ps1
