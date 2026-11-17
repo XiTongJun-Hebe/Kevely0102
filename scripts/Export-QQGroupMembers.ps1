@@ -16,6 +16,9 @@ param(
   ,[int64]$Hwnd = 0
   ,[switch]$Fast
   ,[int]$MaxPages = 60
+  ,[int]$Passes = 1
+  ,[int]$MinHits = 1
+  ,[switch]$TailSweep
   ,[string]$PresetName = 'qq'
   ,[string]$PresetPath = ''
 )
@@ -45,8 +48,9 @@ if ($anchors.Count -eq 0) {
   return
 }
 Write-Host ('[i] detected {0} visible rows' -f $anchors.Count)
-$res = Invoke-HoverFieldScan -Preset $preset -OutFile $OutFile -MaxPages $MaxPages -VerifyDouble:(-not $Fast)
+$res = Invoke-HoverFieldScan -Preset $preset -OutFile $OutFile -MaxPages $MaxPages -Passes $Passes -MinHits $MinHits -TailSweep:$TailSweep -VerifyDouble:(-not $Fast)
 Write-Host ('[ok] {0} unique values written to {1}' -f $res.Count, $res.OutFile)
-Write-Host ('[i] log: {0} ({1} pages, {2}s)' -f $res.LogFile, $res.Pages, $res.ElapsedSeconds)
+Write-Host ('[i] log: {0} ({1}s, raw reads {2})' -f $res.LogFile, $res.ElapsedSeconds, $res.RawCount)
+Write-Host ('[i] hits: {0} (values seen once stay only if -MinHits 1)' -f $res.HitsFile)
 if ($res.Count -lt 10) { Write-Warning 'Very few rows were read. Re-run Get-HoverGeometry.ps1 and adjust the preset.' }
 $res

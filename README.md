@@ -60,6 +60,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-HoverOcrEngin
 # 2. open your QQ group chat, expand the member panel, then:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Export-QQGroupMembers.ps1 `
   -GroupId 100000000 -OutFile .\members.txt
+
+# 3. whole list: three sweeps plus a bottom-up sweep, keep ids seen twice
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Export-QQGroupMembers.ps1 `
+  -GroupId 100000000 -OutFile .\members.txt -Passes 3 -MinHits 2 -TailSweep
 ```
 
 Output is one id per line, ascending, no duplicates:
@@ -149,7 +153,13 @@ values, never in geometry.
 whole-screen OCR of a 2560×1600 desktop misreads digits badly.
 
 **Verification.** `-Fast` accepts the first successful read. Without it each row is read twice
-and only a agreeing pair is kept, which is slower and much cleaner.
+and only an agreeing pair is kept, which is slower and much cleaner.
+
+**Repeats.** A single sweep is not enough for a full roster: OCR slips and viewport boundaries
+both cost rows. `-Passes 3 -MinHits 2` sweeps the list three times and keeps only ids seen at
+least twice; `-TailSweep` additionally jumps to the bottom and walks upwards, which is where the
+last rows usually escape. Every id's vote count is written to `<out>.hits.txt`, so the values
+seen exactly once can be inspected by hand instead of silently ending up in the result.
 
 ## Accuracy, honestly
 
@@ -172,6 +182,28 @@ the result:
   shift coordinates.
 - Slow by design: ~0.9 s per row with verification.
 - Windows only.
+
+## Troubleshooting
+
+**"No rows detected"** — the panel is closed, the window is minimized, or the preset no longer
+matches the layout. Re-open the member panel and re-run `Get-HoverGeometry.ps1`.
+
+**Rows are found but no value comes back** — the app must be focused (`EnsureForeground = $true`);
+the jiggle path must actually reach the row; the card band offsets must cover the "QQ <id>" line.
+Take one manual screenshot of a hovered row to compare against the preset.
+
+**Coordinates look halved** — the host is DPI-unaware. The module calls `SetProcessDPIAware()`
+on import; keep that call if you copy the geometry code elsewhere.
+
+**File Explorer freezes in the output folder** — not this tool's doing, but easy to hit while
+working: deleting a few hundred files, or clearing large caches, while an Explorer window sits in
+that folder leaves it with a stale enumeration and logs `AppHangB1`. Close the window before bulk
+deletes; if it already hangs, kill that `explorer.exe`, delete
+`%LOCALAPPDATA%\Microsoft\Windows\Explorer\*.db` and restart Explorer.
+
+**More ids than the group has members** — normal for one sweep. Short 5-to-8 digit ids are real,
+stale ex-members can be listed, and single-pass OCR slips exist. Use `-Passes 3 -MinHits 2
+-TailSweep` and check `<out>.hits.txt` for the values that only appeared once.
 
 ## Privacy and ethics
 

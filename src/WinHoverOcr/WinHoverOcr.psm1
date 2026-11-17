@@ -228,12 +228,13 @@ function ConvertTo-HoverDigits {
   $out.ToString()
 }
 
-function Get-HoverRowAnchors {
+function Get-HoverPanelState {
   [CmdletBinding()]
   param([hashtable]$Preset)
   $panel = $Preset.Panel
   $lines = Invoke-HoverOcrRegion -X $panel.X -Y $panel.Y -Width $panel.Width -Height $panel.Height -Scale $panel.Scale
   $ys = New-Object System.Collections.ArrayList
+  $names = New-Object System.Collections.ArrayList
   $colX = $panel.RowTextX
   $minH = $panel.MinWordHeight
   $maxH = $panel.MaxWordHeight
@@ -241,6 +242,7 @@ function Get-HoverRowAnchors {
     foreach ($w in $line.Words) {
       if ($w.X -ge $colX[0] -and $w.X -le $colX[1] -and $w.Height -ge $minH -and $w.Height -le $maxH) {
         [void]$ys.Add($w.Y)
+        [void]$names.Add($w.Text)
       }
     }
   }
@@ -250,7 +252,13 @@ function Get-HoverRowAnchors {
   foreach ($y in $sorted) {
     if (($y - $last) -gt $Preset.Row.MinAnchorGap) { [void]$anchors.Add($y); $last = $y }
   }
-  $anchors
+  [pscustomobject]@{ Anchors = $anchors; Signature = (($names | Sort-Object) -join '|') }
+}
+
+function Get-HoverRowAnchors {
+  [CmdletBinding()]
+  param([hashtable]$Preset)
+  (Get-HoverPanelState -Preset $Preset).Anchors
 }
 
 function Complete-HoverRowAnchors {
@@ -339,59 +347,122 @@ function Invoke-HoverFieldScan {
     [int]$MaxPages = 60,
     [switch]$VerifyDouble,
     [int]$StaleLimit = 3,
-    [switch]$NoScroll
+    [switch]$NoScroll,
+    [int]$Passes = 1,
+    [switch]$TailSweep,
+    [int]$MinHits = 1,
+    [int]$SweepNotches = 0,
+    [int]$TopNotches = 60
   )
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
-  $set = New-Object 'System.Collections.Generic.HashSet[string]'
+  $hits = @{}
   $log = New-Object System.Collections.ArrayList
-  $stale = 0
-  $pages = 0
   if (-not $LogPath) { $LogPath = [System.IO.Path]::ChangeExtension($OutFile, '.log') }
   $hwnd = [int64]$Preset.Window.Hwnd
   if ($hwnd -le 0) { throw 'Preset has no Window.Hwnd. Run Get-HoverWindow and set it.' }
-  for ($page = 0; $page -lt $MaxPages; $page++) {
-    $pages = $page + 1
+  if ($Passes -lt 1) { $Passes = 1 }
+  $scroll = $Preset.Scroll
+  if ($SweepNotches -le 0) { $SweepNotches = [int]$scroll.Notches }
+  $panelTop = [int]$Preset.Panel.Y
+  $panelBottom = [int]$Preset.Panel.Y + [int]$Preset.Panel.Height
+
+  # Reads the current viewport: hovers every row, OCRs the card, counts hits per value.
+  $readViewport = {
+    param([string]$Tag)
     if ($Preset.EnsureForeground -and [WinHoverNative]::GetForegroundWindow() -ne [IntPtr]$hwnd) {
       [void][WinHoverNative]::SetForegroundWindow([IntPtr]$hwnd)
       Start-Sleep -Milliseconds 350
     }
-    $anchors = @(Get-HoverRowAnchors -Preset $Preset)
-    if ($anchors.Count -eq 0) {
-      [void]$log.Add(('PAGE {0} NO_ROWS (panel closed, occluded, or preset mismatch)' -f $page))
-      break
+    $state = Get-HoverPanelState -Preset $Preset
+    if ($state.Anchors.Count -eq 0) {
+      [void]$log.Add(('{0} NO_ROWS (panel closed, occluded, or preset mismatch)' -f $Tag))
+      return [pscustomobject]@{ Done = $true; Added = 0; Signature = ''; Rows = 0; Pitch = 0 }
     }
     $pitch = $Preset.Row.Pitch
-    if ($anchors.Count -ge 2) {
-      $diffs = for ($i = 1; $i -lt $anchors.Count; $i++) { $anchors[$i] - $anchors[$i - 1] }
+    if ($state.Anchors.Count -ge 2) {
+      $diffs = for ($i = 1; $i -lt $state.Anchors.Count; $i++) { $state.Anchors[$i] - $state.Anchors[$i - 1] }
       $pitch = [int](($diffs | Measure-Object -Average).Average)
     }
-    $rows = @(Complete-HoverRowAnchors -Anchors $anchors -TopY $Preset.Panel.Y -BottomY ($Preset.Panel.Y + $Preset.Panel.Height) -Pitch $pitch)
+    $rows = @(Complete-HoverRowAnchors -Anchors $state.Anchors -TopY $panelTop -BottomY $panelBottom -Pitch $pitch)
     $added = 0
     $detail = New-Object System.Collections.ArrayList
     foreach ($y in $rows) {
       $v = Read-HoverCardValueVerified -Preset $Preset -RowCenterY $y -Double:$VerifyDouble
-      if ($v -and $set.Add($v)) { $added++ }
+      if ($v) {
+        $n = 0
+        if ($hits.ContainsKey($v)) { $n = [int]$hits[$v] }
+        $hits[$v] = $n + 1
+        if ($n -eq 0) { $added++ }
+      }
       [void]$detail.Add(('{0}:{1}' -f $y, $v))
     }
-    [void]$log.Add(('PAGE {0} rows={1} pitch={2} added={3} total={4} :: {5}' -f $page, $rows.Count, $pitch, $added, $set.Count, ($detail -join ' ')))
-    if ($added -lt 1) { $stale++ } else { $stale = 0 }
-    if ($stale -ge $StaleLimit) {
-      [void]$log.Add(('STOP stale at page {0}' -f $page))
-      break
-    }
-    if ($NoScroll) { break }
-    Invoke-HoverScroll -X $Preset.Scroll.X -Y $Preset.Scroll.Y -Notches $Preset.Scroll.Notches -SettleMs $Preset.Scroll.SettleMs
+    [void]$log.Add(('{0} rows={1} pitch={2} added={3} total={4} :: {5}' -f $Tag, $rows.Count, $pitch, $added, $hits.Count, ($detail -join ' ')))
+    [pscustomobject]@{ Done = $false; Added = $added; Signature = $state.Signature; Rows = $rows.Count; Pitch = $pitch }
   }
-  $values = @($set)
+
+  for ($pass = 1; $pass -le $Passes; $pass++) {
+    if ($pass -gt 1 -and -not $NoScroll) {
+      Invoke-HoverScroll -X $scroll.X -Y $scroll.Y -Notches (-$TopNotches) -SettleMs $scroll.SettleMs
+      Start-Sleep -Milliseconds 250
+    }
+    $lastSig = ''
+    $stale = 0
+    for ($page = 0; $page -lt $MaxPages; $page++) {
+      $r = & $readViewport ('PASS {0} PAGE {1}' -f $pass, $page)
+      if ($r.Done) { break }
+      if ($lastSig -and $r.Signature -and $r.Signature -eq $lastSig) {
+        [void]$log.Add(('PASS {0} NO_PROGRESS at page {1} (viewport did not change)' -f $pass, $page))
+        break
+      }
+      if ($r.Added -lt 1) { $stale++ } else { $stale = 0 }
+      if ($stale -ge $StaleLimit) { [void]$log.Add(('PASS {0} STOP stale at page {1}' -f $pass, $page)); break }
+      if ($NoScroll) { break }
+      Invoke-HoverScroll -X $scroll.X -Y $scroll.Y -Notches $SweepNotches -SettleMs $scroll.SettleMs
+      $lastSig = $r.Signature
+    }
+  }
+
+  # Optional tail sweep: jump to the very bottom, then walk upwards to catch the last rows.
+  if ($TailSweep -and -not $NoScroll) {
+    [void]$log.Add('TAIL jump to bottom')
+    Invoke-HoverScroll -X $scroll.X -Y $scroll.Y -Notches $TopNotches -SettleMs $scroll.SettleMs
+    Start-Sleep -Milliseconds 400
+    $lastSig = ''
+    $stale = 0
+    $tailPages = [math]::Min($MaxPages, 45)
+    for ($page = 0; $page -lt $tailPages; $page++) {
+      $r = & $readViewport ('TAIL PAGE {0}' -f $page)
+      if ($r.Done) { break }
+      if ($lastSig -and $r.Signature -and $r.Signature -eq $lastSig) {
+        [void]$log.Add(('TAIL NO_PROGRESS at page {0}' -f $page))
+        break
+      }
+      if ($r.Added -lt 1) { $stale++ } else { $stale = 0 }
+      if ($stale -ge $StaleLimit) { [void]$log.Add(('TAIL STOP stale at page {0}' -f $page)); break }
+      Invoke-HoverScroll -X $scroll.X -Y $scroll.Y -Notches (-$SweepNotches) -SettleMs $scroll.SettleMs
+      $lastSig = $r.Signature
+    }
+  }
+
+  $values = @($hits.Keys | Where-Object { [int]$hits[$_] -ge $MinHits })
   $count = Write-HoverResult -Values $values -Path $OutFile
+  $hitsFile = [System.IO.Path]::ChangeExtension($OutFile, '.hits.txt')
+  $hitLines = New-Object System.Collections.ArrayList
+  [void]$hitLines.Add('value' + [char]9 + 'hits')
+  foreach ($k in ($hits.Keys | Sort-Object { [double]$_ })) { [void]$hitLines.Add(([string]$k) + [char]9 + ([string]$hits[$k])) }
+  [System.IO.File]::WriteAllLines($hitsFile, $hitLines, (New-Object System.Text.UTF8Encoding($false)))
+  [void]$log.Add(('DONE values={0} (minHits={1}) raw={2} passes={3} tail={4}' -f $count, $MinHits, $hits.Count, $Passes, $TailSweep.IsPresent))
   $sw.Stop()
-  [void]$log.Add(('DONE total={0} pages={1} elapsed={2:n1}s' -f $count, $pages, $sw.Elapsed.TotalSeconds))
+  [void]$log.Add(('ELAPSED {0:n1}s' -f $sw.Elapsed.TotalSeconds))
   [System.IO.File]::WriteAllLines($LogPath, $log, (New-Object System.Text.UTF8Encoding($false)))
   [pscustomobject]@{
     OutFile = $OutFile
+    HitsFile = $hitsFile
     LogFile = $LogPath
     Count = $count
-    Pages = $pages
+    RawCount = $hits.Count
+    Passes = $Passes
+    TailSweep = $TailSweep.IsPresent
     ElapsedSeconds = [math]::Round($sw.Elapsed.TotalSeconds, 1)
   }
 }
@@ -428,4 +499,4 @@ function Get-HoverOcrText {
   }
   $lines
 }
-Export-ModuleMember -Function Initialize-HoverOcr, Get-HoverOcrText, Get-HoverWindow, Get-HoverPreset, Move-HoverCursor, Invoke-HoverClick, Invoke-HoverScroll, Get-HoverScreenshot, Get-HoverWindowScreenshot, Invoke-HoverOcrRegion, ConvertTo-HoverDigits, Get-HoverRowAnchors, Complete-HoverRowAnchors, Read-HoverCardValue, Read-HoverCardValueVerified, Write-HoverResult, Invoke-HoverFieldScan, Set-HoverPresetWindow
+Export-ModuleMember -Function Initialize-HoverOcr, Get-HoverOcrText, Get-HoverWindow, Get-HoverPreset, Move-HoverCursor, Invoke-HoverClick, Invoke-HoverScroll, Get-HoverScreenshot, Get-HoverWindowScreenshot, Invoke-HoverOcrRegion, ConvertTo-HoverDigits, Get-HoverPanelState, Get-HoverRowAnchors, Complete-HoverRowAnchors, Read-HoverCardValue, Read-HoverCardValueVerified, Write-HoverResult, Invoke-HoverFieldScan, Set-HoverPresetWindow

@@ -47,11 +47,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Get-HoverGeometry.
 # 3. scan (long; run it in the background and poll the log)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Export-QQGroupMembers.ps1 `
   -GroupId 100000000 -OutFile .\members.txt
+
+# 4. authoritative roster: 3 sweeps + a bottom-up sweep, keep ids seen >= 2 times
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Export-QQGroupMembers.ps1 `
+  -GroupId 100000000 -OutFile .\members.txt -Passes 3 -MinHits 2 -TailSweep
 ```
 
 Expect roughly 1 s per row with verification; a 200-row list plus scrolling takes about 4-6 min,
 longer on slow machines. Read the generated `.log`: every page reports
 `PAGE n rows= pitch= added= total=`, and `STOP stale` means no new values for several pages.
+
+One sweep is not a roster. Viewport edges and OCR slips both cost rows, so a single pass can be
+short *and* polluted. For delivery-grade output run `-Passes 3 -MinHits 2 -TailSweep`: three
+sweeps from the top plus one sweep upwards from the bottom, keeping only ids that were read in at
+least two sweeps. `<out>.hits.txt` then lists every id with its vote count — values with one vote
+are the ones you check by hand (search them in the member panel) instead of shipping them blind.
 
 ## Adapting to a new app
 
@@ -97,3 +107,9 @@ Then `Invoke-HoverScan.ps1 -PresetPath .\mypreset.psd1 -OutFile .\out.txt`.
 - Row pitch is 90 px at 100 % layout; 13 rows are visible at a time.
 - `Notches = 3` advances ~4-5 rows, so 8 rows always overlap between pages — never silent gaps.
 - Sorted output; `-Fast` disables the double read.
+- A 222-member group produced 227 unique ids in one sweep: real 5-to-8 digit ids exist, the panel
+  can still list ex-members, and a handful of ids were OCR slips. The vote file is what separates
+  those three cases.
+- If File Explorer freezes while you clean up the output folder, it is the shell, not this tool:
+  killing that `explorer.exe`, deleting `%LOCALAPPDATA%\Microsoft\Windows\Explorer\*.db` and
+  restarting Explorer fixes it.

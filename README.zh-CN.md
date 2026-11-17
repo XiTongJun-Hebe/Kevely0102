@@ -58,6 +58,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-HoverOcrEngin
 # 2. 打开 QQ 群聊、展开「群聊成员」面板，然后：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Export-QQGroupMembers.ps1 `
   -GroupId 100000000 -OutFile .\members.txt
+
+# 3. 全量：三轮扫描 + 从底部向上补扫，只保留至少出现两次的号
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Export-QQGroupMembers.ps1 `
+  -GroupId 100000000 -OutFile .\members.txt -Passes 3 -MinHits 2 -TailSweep
 ```
 
 输出一人一行、升序、无重复。
@@ -139,6 +143,10 @@ scripts/
 
 **校验**：`-Fast` 只取第一次成功读数；不加则每行读两次，只有一致才采纳，慢但干净。
 
+**多轮合并**：只扫一轮不足以覆盖整份名单——OCR 会看错，视口边界会漏行。`-Passes 3 -MinHits 2`
+从顶部扫三轮，只保留至少出现两次的号；`-TailSweep` 会先跳到底部再向上补扫，最后几行通常就
+藏在那里。每个号的票数写进 `<out>.hits.txt`，只出现一次的值可以人工核对，而不是悄悄混进结果。
+
 ## 准确率（实话实说）
 
 从截图读 10 位数字是概率性的。仓库自带的实测：222 人的群一轮读出 227 个唯一值——里面
@@ -157,6 +165,24 @@ scripts/
 - 单显示器 100%~200% 缩放均可；混合 DPI 的多屏可能坐标偏移。
 - 慢是设计使然：带校验约每行 0.9 秒。
 - 仅 Windows。
+
+## 排障
+
+**提示「No rows detected」**——面板没开、窗口最小化，或预设与当前界面不匹配。重新展开成员面板，
+跑一遍 `Get-HoverGeometry.ps1`。
+
+**能认出成员行，但读不到号**——软件必须在前台（`EnsureForeground = $true`）；抖动路径要真的落到
+那一行；卡片条带的纵向偏移要盖住「QQ 号码」那一行。手动悬停一行截个图，和预设里的条带对一下。
+
+**坐标看起来只有一半**——宿主是 DPI 虚拟化的。模块在导入时就调 `SetProcessDPIAware()`；
+如果你把几何代码搬去别处，记得保留这一行。
+
+**资源管理器在输出目录里卡死**——不是本工具造成的，但很容易撞上：资源管理器窗口停在某个文件夹时，
+删掉几百个文件或清大缓存，会让它的枚举状态失效并记录 `AppHangB1`。批量删除前先关掉那个窗口；
+已经卡了就杀掉那个 `explorer.exe`，清掉 `%LOCALAPPDATA%\Microsoft\Windows\Explorer\*.db` 再重启。
+
+**读出的号比群人数多**——单轮扫描的正常现象：5~8 位的老号真实存在，列表里可能有已退群的残留，
+单轮 OCR 也会有笔误。用 `-Passes 3 -MinHits 2 -TailSweep`，再查 `<out>.hits.txt` 里只出现一次的号。
 
 ## 隐私与合规
 
